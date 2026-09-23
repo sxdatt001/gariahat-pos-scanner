@@ -1,251 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#315d9e">
-  <title>Gariahat POS Scanner</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#315d9e">
+<title>Gariahat POS Scanner</title>
 
-  <!-- QR decoder. This page must be hosted on HTTPS (for example GitHub Pages). -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #f5f5f5;
-      color: #222;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .app {
-      max-width: 520px;
-      margin: 0 auto;
-      min-height: 100vh;
-      padding: 18px;
-      padding-top: max(18px, env(safe-area-inset-top));
-      padding-bottom: max(18px, env(safe-area-inset-bottom));
-    }
-    .header { text-align: center; margin-bottom: 16px; }
-    .header h1 { margin: 0; font-size: 25px; }
-    .header p { margin: 6px 0 0; color: #666; font-size: 14px; }
-
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: 0 1px 6px rgba(0,0,0,.12);
-    }
-    #reader {
-      width: 100%;
-      overflow: hidden;
-      border-radius: 12px;
-      background: #111;
-    }
-    #reader video {
-      object-fit: cover !important;
-      border-radius: 12px;
-    }
-    .status {
-      margin-top: 14px;
-      min-height: 22px;
-      text-align: center;
-      font-size: 15px;
-      line-height: 1.4;
-    }
-    .ok { color: #08783e; }
-    .error { color: #b00020; }
-    .hint {
-      margin: 12px 0 0;
-      color: #666;
-      font-size: 13px;
-      text-align: center;
-      line-height: 1.45;
-    }
-    button {
-      width: 100%;
-      border: 0;
-      border-radius: 10px;
-      padding: 14px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    #startBtn {
-      margin-top: 14px;
-      background: #0b6bcb;
-      color: white;
-    }
-    #cancelBtn {
-      margin-top: 10px;
-      background: #e9e9e9;
-      color: #222;
-    }
-  </style>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f5;color:#222;font-family:Arial,Helvetica,sans-serif}
+.app{max-width:520px;margin:auto;min-height:100vh;padding:18px;padding-top:max(18px,env(safe-area-inset-top));padding-bottom:max(18px,env(safe-area-inset-bottom))}
+.header{text-align:center;margin-bottom:15px}
+.header h1{margin:0;font-size:25px}.header p{margin:5px 0 0;color:#666;font-size:14px}
+.card{background:#fff;border-radius:14px;padding:15px;box-shadow:0 1px 6px rgba(0,0,0,.12)}
+.viewport{position:relative;width:100%;overflow:hidden;border-radius:12px;background:#111;min-height:300px}
+#nativeVideo{display:none;width:100%;min-height:300px;max-height:62vh;object-fit:cover;background:#111}
+#reader{width:100%;min-height:300px;background:#111}
+#reader video{object-fit:cover!important}
+.guide{pointer-events:none;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5}
+.guide-box{width:76%;aspect-ratio:1/1;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.12)}
+.status{margin-top:13px;min-height:22px;text-align:center;font-size:15px;line-height:1.4}
+.ok{color:#08783e}.error{color:#b00020}
+.debug{margin-top:9px;padding:9px;border-radius:8px;background:#f3f3f3;color:#555;font-size:12px;word-break:break-all;display:none}
+.hint{margin:10px 0 0;color:#666;font-size:13px;text-align:center;line-height:1.45}
+button{width:100%;border:0;border-radius:10px;padding:14px;font-size:16px;font-weight:bold;cursor:pointer}
+.primary{margin-top:13px;background:#0b6bcb;color:#fff}
+.secondary{margin-top:9px;background:#e9e9e9;color:#222}
+</style>
 </head>
 
 <body>
 <div class="app">
-  <div class="header">
-    <h1>Gariahat Online</h1>
-    <p>Scan Product</p>
-  </div>
+ <div class="header"><h1>Gariahat Online</h1><p>Live Product Scanner — v2</p></div>
+ <div class="card">
+   <div class="viewport">
+     <video id="nativeVideo" playsinline muted></video>
+     <div id="reader"></div>
+     <div class="guide"><div class="guide-box"></div></div>
+   </div>
 
-  <div class="card">
-    <div id="reader"></div>
+   <div id="status" class="status">Starting scanner…</div>
+   <div id="debug" class="debug"></div>
+   <p class="hint">Hold the QR steady about 6–12 inches from the camera. The entire camera frame is scanned; the white square is only a visual guide.</p>
 
-    <div id="status" class="status">Starting rear camera…</div>
-
-    <p class="hint">
-      Hold the product QR inside the camera view. It will scan automatically.
-      No photo is required.
-    </p>
-
-    <button id="startBtn" type="button" onclick="startScanner()" style="display:none;">
-      📷 START CAMERA
-    </button>
-
-    <button id="cancelBtn" type="button" onclick="returnToPOS()">
-      CANCEL / RETURN TO POS
-    </button>
-  </div>
+   <button id="retryBtn" class="primary" type="button" onclick="restartScanner()" style="display:none">📷 RETRY CAMERA</button>
+   <button class="secondary" type="button" onclick="returnToPOS()">CANCEL / RETURN TO POS</button>
+ </div>
 </div>
 
 <script>
-  const POS_URL = "https://script.google.com/macros/s/AKfycbyL59emy_24Ii7jjW7fL7JS5m94VPHc_Q0uycvrW2Fr66uIEm2Ut9fm-1YzGfxBnZg9/exec";
+const POS_URL="https://script.google.com/macros/s/AKfycbyL59emy_24Ii7jjW7fL7JS5m94VPHc_Q0uycvrW2Fr66uIEm2Ut9fm-1YzGfxBnZg9/exec";
 
-  let scanner = null;
-  let scanning = false;
-  let returning = false;
+let html5Scanner=null;
+let nativeStream=null;
+let nativeTimer=null;
+let returning=false;
+let mode="";
+let lastRaw="";
 
-  function setStatus(message, type) {
-    const el = document.getElementById("status");
-    el.textContent = message || "";
-    el.className = "status" + (type ? " " + type : "");
-  }
+function status(msg,type=""){
+ const el=document.getElementById("status");
+ el.textContent=msg;
+ el.className="status"+(type?" "+type:"");
+}
+function debug(msg){
+ const el=document.getElementById("debug");
+ el.style.display="block";
+ el.textContent=msg;
+}
+function extractSku(value){
+ const raw=String(value||"").trim();
+ if(!raw)return "";
+ try{
+   const u=new URL(raw);
+   const s=(u.searchParams.get("sku")||"").trim();
+   if(s)return s.toUpperCase();
+ }catch(e){}
+ const m=raw.match(/\bGO-[A-Z0-9-]+\b/i);
+ return m?m[0].toUpperCase():"";
+}
+async function decoded(raw){
+ if(returning)return;
+ lastRaw=String(raw||"");
+ debug("QR detected: "+lastRaw);
+ const sku=extractSku(lastRaw);
+ if(!sku){
+   status("QR was detected, but no GO- SKU was found. Keep scanning.","error");
+   return;
+ }
+ returning=true;
+ status("Scanned "+sku+" — returning to POS…","ok");
+ await stopAll();
+ window.location.replace(POS_URL+"?sku="+encodeURIComponent(sku));
+}
+async function stopAll(){
+ if(nativeTimer){clearInterval(nativeTimer);nativeTimer=null}
+ if(nativeStream){
+   nativeStream.getTracks().forEach(t=>t.stop());
+   nativeStream=null;
+ }
+ if(html5Scanner){
+   try{await html5Scanner.stop()}catch(e){}
+   try{await html5Scanner.clear()}catch(e){}
+   html5Scanner=null;
+ }
+}
+async function startNative(){
+ if(!("BarcodeDetector" in window)) throw new Error("BarcodeDetector unavailable");
 
-  function extractSku(rawValue) {
-    const raw = String(rawValue || "").trim();
-    if (!raw) return "";
+ const formats=await BarcodeDetector.getSupportedFormats();
+ if(!formats.includes("qr_code")) throw new Error("Native QR format unavailable");
 
-    // Existing labels: https://.../exec?sku=GO-APP-SCF-0004
-    try {
-      const url = new URL(raw);
-      const fromUrl = (url.searchParams.get("sku") || "").trim();
-      if (fromUrl) return fromUrl;
-    } catch (e) {
-      // Not a URL; continue and treat it as a possible raw SKU.
-    }
+ const detector=new BarcodeDetector({formats:["qr_code"]});
+ nativeStream=await navigator.mediaDevices.getUserMedia({
+   audio:false,
+   video:{
+     facingMode:{ideal:"environment"},
+     width:{ideal:1920},
+     height:{ideal:1080}
+   }
+ });
 
-    // Future/simple labels containing only GO-... SKU.
-    const match = raw.match(/\bGO-[A-Z0-9-]+\b/i);
-    return match ? match[0].toUpperCase() : "";
-  }
+ const video=document.getElementById("nativeVideo");
+ document.getElementById("reader").style.display="none";
+ video.style.display="block";
+ video.srcObject=nativeStream;
+ await video.play();
+ mode="native";
+ status("Ready — point the camera at a product QR.");
 
-  async function stopScanner() {
-    if (!scanner || !scanning) return;
-    try {
-      await scanner.stop();
-    } catch (e) {}
-    try {
-      await scanner.clear();
-    } catch (e) {}
-    scanning = false;
-  }
+ let busy=false;
+ nativeTimer=setInterval(async()=>{
+   if(busy||returning||video.readyState<2)return;
+   busy=true;
+   try{
+     const codes=await detector.detect(video);
+     if(codes&&codes.length&&codes[0].rawValue){
+       await decoded(codes[0].rawValue);
+     }
+   }catch(e){}
+   busy=false;
+ },120);
+}
+async function startFallback(){
+ document.getElementById("nativeVideo").style.display="none";
+ document.getElementById("reader").style.display="block";
 
-  async function handleScan(decodedText) {
-    if (returning) return;
+ if(typeof Html5Qrcode==="undefined") throw new Error("html5-qrcode library unavailable");
 
-    const sku = extractSku(decodedText);
-    if (!sku) {
-      setStatus("QR detected, but it does not contain a Gariahat SKU. Try again.", "error");
-      return;
-    }
+ html5Scanner=new Html5Qrcode("reader",{
+   formatsToSupport:[Html5QrcodeSupportedFormats.QR_CODE],
+   verbose:false
+ });
 
-    returning = true;
-    setStatus("Scanned " + sku + ". Returning to POS…", "ok");
+ const config={
+   fps:20,
+   // Deliberately NO qrbox: scan the full video frame.
+   aspectRatio:1.0,
+   disableFlip:false,
+   videoConstraints:{
+     facingMode:"environment",
+     width:{ideal:1920},
+     height:{ideal:1080}
+   }
+ };
 
-    await stopScanner();
+ await html5Scanner.start(
+   {facingMode:"environment"},
+   config,
+   text=>decoded(text),
+   ()=>{}
+ );
+ mode="html5-qrcode";
+ status("Ready — point the camera at a product QR.");
+}
+async function startScanner(){
+ document.getElementById("retryBtn").style.display="none";
+ document.getElementById("debug").style.display="none";
+ status("Starting scanner…");
 
-    // Preserve only the SKU. Apps Script then uses its existing lookup workflow.
-    window.location.replace(POS_URL + "?sku=" + encodeURIComponent(sku));
-  }
-
-  async function startScanner() {
-    if (scanning || returning) return;
-
-    const startBtn = document.getElementById("startBtn");
-    startBtn.style.display = "none";
-    setStatus("Starting rear camera…");
-
-    if (!window.isSecureContext) {
-      setStatus("Camera requires an HTTPS page.", "error");
-      startBtn.style.display = "block";
-      return;
-    }
-
-    if (typeof Html5Qrcode === "undefined") {
-      setStatus("QR scanner library did not load. Check your internet connection and reload.", "error");
-      startBtn.style.display = "block";
-      return;
-    }
-
-    scanner = new Html5Qrcode("reader");
-
-    const config = {
-      fps: 12,
-      qrbox: function(viewfinderWidth, viewfinderHeight) {
-        const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
-        return { width: edge, height: edge };
-      },
-      aspectRatio: 1.0,
-      disableFlip: false
-    };
-
-    try {
-      await scanner.start(
-        { facingMode: { exact: "environment" } },
-        config,
-        handleScan,
-        function() { /* normal scan misses are intentionally ignored */ }
-      );
-      scanning = true;
-      setStatus("Ready — point the camera at a product QR.");
-    } catch (firstError) {
-      // Some iPhones/browsers reject "exact". Retry with a softer rear-camera request.
-      try {
-        await scanner.start(
-          { facingMode: "environment" },
-          config,
-          handleScan,
-          function() {}
-        );
-        scanning = true;
-        setStatus("Ready — point the camera at a product QR.");
-      } catch (secondError) {
-        scanning = false;
-        setStatus(
-          "Could not open the camera. In Safari, allow Camera for this scanner website, then tap START CAMERA.",
-          "error"
-        );
-        startBtn.style.display = "block";
-      }
-    }
-  }
-
-  async function returnToPOS() {
-    if (returning) return;
-    returning = true;
-    await stopScanner();
-    window.location.replace(POS_URL);
-  }
-
-  window.addEventListener("load", startScanner);
-
-  window.addEventListener("pagehide", function() {
-    if (scanner && scanning) {
-      scanner.stop().catch(function(){});
-    }
-  });
+ if(!window.isSecureContext){
+   status("This scanner must run from an HTTPS address.","error");
+   document.getElementById("retryBtn").style.display="block";
+   return;
+ }
+ try{
+   // Prefer Safari/native BarcodeDetector when available.
+   await startNative();
+ }catch(nativeError){
+   try{
+     await stopAll();
+     await startFallback();
+   }catch(fallbackError){
+     status("Camera opened, but the QR scanner could not start. Tap RETRY CAMERA.","error");
+     debug("Native: "+nativeError.message+" | Fallback: "+fallbackError.message);
+     document.getElementById("retryBtn").style.display="block";
+   }
+ }
+}
+async function restartScanner(){
+ returning=false;
+ await stopAll();
+ startScanner();
+}
+async function returnToPOS(){
+ if(returning)return;
+ returning=true;
+ await stopAll();
+ window.location.replace(POS_URL);
+}
+window.addEventListener("load",startScanner);
+window.addEventListener("pagehide",()=>{stopAll()});
 </script>
 </body>
 </html>
+
