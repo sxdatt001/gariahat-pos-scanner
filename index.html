@@ -1,219 +1,97 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#315d9e">
-<title>Gariahat POS Scanner</title>
-
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
+<title>Gariahat POS Scanner v3</title>
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#f5f5f5;color:#222;font-family:Arial,Helvetica,sans-serif}
-.app{max-width:520px;margin:auto;min-height:100vh;padding:18px;padding-top:max(18px,env(safe-area-inset-top));padding-bottom:max(18px,env(safe-area-inset-bottom))}
-.header{text-align:center;margin-bottom:15px}
-.header h1{margin:0;font-size:25px}.header p{margin:5px 0 0;color:#666;font-size:14px}
-.card{background:#fff;border-radius:14px;padding:15px;box-shadow:0 1px 6px rgba(0,0,0,.12)}
-.viewport{position:relative;width:100%;overflow:hidden;border-radius:12px;background:#111;min-height:300px}
-#nativeVideo{display:none;width:100%;min-height:300px;max-height:62vh;object-fit:cover;background:#111}
-#reader{width:100%;min-height:300px;background:#111}
-#reader video{object-fit:cover!important}
-.guide{pointer-events:none;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5}
-.guide-box{width:76%;aspect-ratio:1/1;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.12)}
-.status{margin-top:13px;min-height:22px;text-align:center;font-size:15px;line-height:1.4}
-.ok{color:#08783e}.error{color:#b00020}
-.debug{margin-top:9px;padding:9px;border-radius:8px;background:#f3f3f3;color:#555;font-size:12px;word-break:break-all;display:none}
-.hint{margin:10px 0 0;color:#666;font-size:13px;text-align:center;line-height:1.45}
-button{width:100%;border:0;border-radius:10px;padding:14px;font-size:16px;font-weight:bold;cursor:pointer}
-.primary{margin-top:13px;background:#0b6bcb;color:#fff}
-.secondary{margin-top:9px;background:#e9e9e9;color:#222}
+*{box-sizing:border-box} body{margin:0;background:#f5f5f5;font-family:Arial,sans-serif;color:#222}
+.app{max-width:520px;margin:auto;min-height:100vh;padding:18px;padding-top:max(18px,env(safe-area-inset-top))}
+h1{text-align:center;margin:0;font-size:25px} .sub{text-align:center;color:#666;margin:5px 0 15px}
+.card{background:#fff;padding:15px;border-radius:14px;box-shadow:0 1px 6px #0002}
+video{display:block;width:100%;min-height:320px;max-height:65vh;object-fit:cover;background:#111;border-radius:12px}
+#status{text-align:center;min-height:24px;margin:13px 0 5px;line-height:1.4}
+.ok{color:#08783e}.err{color:#b00020}
+#raw{display:none;margin:9px 0;padding:9px;background:#f1f1f1;border-radius:8px;font-size:12px;word-break:break-all}
+.hint{text-align:center;color:#666;font-size:13px;line-height:1.4}
+button{width:100%;border:0;border-radius:10px;padding:14px;font-weight:bold;font-size:16px;margin-top:10px}
+.primary{background:#0b6bcb;color:#fff}.secondary{background:#e9e9e9}
 </style>
 </head>
-
 <body>
 <div class="app">
- <div class="header"><h1>Gariahat Online</h1><p>Live Product Scanner — v2</p></div>
- <div class="card">
-   <div class="viewport">
-     <video id="nativeVideo" playsinline muted></video>
-     <div id="reader"></div>
-     <div class="guide"><div class="guide-box"></div></div>
-   </div>
-
-   <div id="status" class="status">Starting scanner…</div>
-   <div id="debug" class="debug"></div>
-   <p class="hint">Hold the QR steady about 6–12 inches from the camera. The entire camera frame is scanned; the white square is only a visual guide.</p>
-
-   <button id="retryBtn" class="primary" type="button" onclick="restartScanner()" style="display:none">📷 RETRY CAMERA</button>
-   <button class="secondary" type="button" onclick="returnToPOS()">CANCEL / RETURN TO POS</button>
- </div>
+<h1>Gariahat Online</h1>
+<div class="sub">ZXing Product Scanner — v3</div>
+<div class="card">
+<video id="video" playsinline muted></video>
+<div id="status">Starting rear camera…</div>
+<div id="raw"></div>
+<p class="hint">Point the rear camera at the QR and hold steady. Try roughly 6–12 inches away.</p>
+<button id="retry" class="primary" style="display:none" onclick="start()">📷 RETRY SCANNER</button>
+<button class="secondary" onclick="cancel()">CANCEL / RETURN TO POS</button>
 </div>
-
+</div>
 <script>
 const POS_URL="https://script.google.com/macros/s/AKfycbyL59emy_24Ii7jjW7fL7JS5m94VPHc_Q0uycvrW2Fr66uIEm2Ut9fm-1YzGfxBnZg9/exec";
+let reader=null, controls=null, returning=false;
 
-let html5Scanner=null;
-let nativeStream=null;
-let nativeTimer=null;
-let returning=false;
-let mode="";
-let lastRaw="";
-
-function status(msg,type=""){
- const el=document.getElementById("status");
- el.textContent=msg;
- el.className="status"+(type?" "+type:"");
-}
-function debug(msg){
- const el=document.getElementById("debug");
- el.style.display="block";
- el.textContent=msg;
-}
-function extractSku(value){
- const raw=String(value||"").trim();
- if(!raw)return "";
- try{
-   const u=new URL(raw);
-   const s=(u.searchParams.get("sku")||"").trim();
-   if(s)return s.toUpperCase();
- }catch(e){}
+function msg(t,c=""){const e=document.getElementById("status");e.textContent=t;e.className=c}
+function showRaw(t){const e=document.getElementById("raw");e.style.display="block";e.textContent="Decoded QR: "+t}
+function skuFrom(raw){
+ raw=String(raw||"").trim();
+ try { const u=new URL(raw); const s=(u.searchParams.get("sku")||"").trim(); if(s)return s.toUpperCase(); } catch(e){}
  const m=raw.match(/\bGO-[A-Z0-9-]+\b/i);
  return m?m[0].toUpperCase():"";
 }
-async function decoded(raw){
- if(returning)return;
- lastRaw=String(raw||"");
- debug("QR detected: "+lastRaw);
- const sku=extractSku(lastRaw);
- if(!sku){
-   status("QR was detected, but no GO- SKU was found. Keep scanning.","error");
-   return;
- }
- returning=true;
- status("Scanned "+sku+" — returning to POS…","ok");
- await stopAll();
- window.location.replace(POS_URL+"?sku="+encodeURIComponent(sku));
+function stop(){
+ try{if(controls)controls.stop()}catch(e){}
+ controls=null;
 }
-async function stopAll(){
- if(nativeTimer){clearInterval(nativeTimer);nativeTimer=null}
- if(nativeStream){
-   nativeStream.getTracks().forEach(t=>t.stop());
-   nativeStream=null;
- }
- if(html5Scanner){
-   try{await html5Scanner.stop()}catch(e){}
-   try{await html5Scanner.clear()}catch(e){}
-   html5Scanner=null;
- }
+function handle(result){
+ if(!result||returning)return;
+ const raw=typeof result.getText==="function"?result.getText():String(result.text||result);
+ showRaw(raw);
+ const sku=skuFrom(raw);
+ if(!sku){msg("QR decoded, but no GO- SKU was found. Keep scanning.","err");return}
+ returning=true; msg("Scanned "+sku+" — returning to POS…","ok"); stop();
+ setTimeout(()=>location.replace(POS_URL+"?sku="+encodeURIComponent(sku)),250);
 }
-async function startNative(){
- if(!("BarcodeDetector" in window)) throw new Error("BarcodeDetector unavailable");
-
- const formats=await BarcodeDetector.getSupportedFormats();
- if(!formats.includes("qr_code")) throw new Error("Native QR format unavailable");
-
- const detector=new BarcodeDetector({formats:["qr_code"]});
- nativeStream=await navigator.mediaDevices.getUserMedia({
-   audio:false,
-   video:{
-     facingMode:{ideal:"environment"},
-     width:{ideal:1920},
-     height:{ideal:1080}
-   }
- });
-
- const video=document.getElementById("nativeVideo");
- document.getElementById("reader").style.display="none";
- video.style.display="block";
- video.srcObject=nativeStream;
- await video.play();
- mode="native";
- status("Ready — point the camera at a product QR.");
-
- let busy=false;
- nativeTimer=setInterval(async()=>{
-   if(busy||returning||video.readyState<2)return;
-   busy=true;
-   try{
-     const codes=await detector.detect(video);
-     if(codes&&codes.length&&codes[0].rawValue){
-       await decoded(codes[0].rawValue);
-     }
-   }catch(e){}
-   busy=false;
- },120);
-}
-async function startFallback(){
- document.getElementById("nativeVideo").style.display="none";
- document.getElementById("reader").style.display="block";
-
- if(typeof Html5Qrcode==="undefined") throw new Error("html5-qrcode library unavailable");
-
- html5Scanner=new Html5Qrcode("reader",{
-   formatsToSupport:[Html5QrcodeSupportedFormats.QR_CODE],
-   verbose:false
- });
-
- const config={
-   fps:20,
-   // Deliberately NO qrbox: scan the full video frame.
-   aspectRatio:1.0,
-   disableFlip:false,
-   videoConstraints:{
-     facingMode:"environment",
-     width:{ideal:1920},
-     height:{ideal:1080}
-   }
- };
-
- await html5Scanner.start(
-   {facingMode:"environment"},
-   config,
-   text=>decoded(text),
-   ()=>{}
- );
- mode="html5-qrcode";
- status("Ready — point the camera at a product QR.");
-}
-async function startScanner(){
- document.getElementById("retryBtn").style.display="none";
- document.getElementById("debug").style.display="none";
- status("Starting scanner…");
-
- if(!window.isSecureContext){
-   status("This scanner must run from an HTTPS address.","error");
-   document.getElementById("retryBtn").style.display="block";
-   return;
- }
+async function start(){
+ returning=false; stop();
+ document.getElementById("retry").style.display="none";
+ document.getElementById("raw").style.display="none";
+ msg("Starting rear camera…");
  try{
-   // Prefer Safari/native BarcodeDetector when available.
-   await startNative();
- }catch(nativeError){
-   try{
-     await stopAll();
-     await startFallback();
-   }catch(fallbackError){
-     status("Camera opened, but the QR scanner could not start. Tap RETRY CAMERA.","error");
-     debug("Native: "+nativeError.message+" | Fallback: "+fallbackError.message);
-     document.getElementById("retryBtn").style.display="block";
-   }
+   if(!window.ZXingBrowser) throw new Error("ZXing library did not load");
+   reader=new ZXingBrowser.BrowserQRCodeReader(undefined,{
+     delayBetweenScanAttempts:100,
+     delayBetweenScanSuccess:300
+   });
+   const constraints={
+     audio:false,
+     video:{
+       facingMode:{ideal:"environment"},
+       width:{ideal:1280},
+       height:{ideal:720}
+     }
+   };
+   controls=await reader.decodeFromConstraints(
+     constraints,
+     document.getElementById("video"),
+     (result,error,ctrl)=>{ if(result)handle(result); }
+   );
+   msg("Ready — point camera at a product QR.");
+ }catch(e){
+   console.error(e);
+   msg("Scanner could not start: "+(e.message||e),"err");
+   document.getElementById("retry").style.display="block";
  }
 }
-async function restartScanner(){
- returning=false;
- await stopAll();
- startScanner();
-}
-async function returnToPOS(){
- if(returning)return;
- returning=true;
- await stopAll();
- window.location.replace(POS_URL);
-}
-window.addEventListener("load",startScanner);
-window.addEventListener("pagehide",()=>{stopAll()});
+function cancel(){returning=true;stop();location.replace(POS_URL)}
+window.addEventListener("load",start);
+window.addEventListener("pagehide",stop);
 </script>
 </body>
 </html>
-
